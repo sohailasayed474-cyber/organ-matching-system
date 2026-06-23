@@ -1,0 +1,802 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Smart Organ Matching System</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet"/>
+<style>
+  :root {
+    --bg: #0a0e0f;
+    --surface: #111618;
+    --surface2: #161d20;
+    --border: #1e2a2e;
+    --border2: #2a3a40;
+    --accent: #00e5b0;
+    --accent2: #00b8e0;
+    --red: #ff4d6d;
+    --amber: #ffc847;
+    --muted: #4a6068;
+    --text: #d4e8ec;
+    --text2: #7a9aa4;
+    --greedy: #00e5b0;
+    --brute: #a78bfa;
+    --recursive: #fbbf24;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Syne', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── GRID BACKGROUND ── */
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background-image:
+      linear-gradient(var(--border) 1px, transparent 1px),
+      linear-gradient(90deg, var(--border) 1px, transparent 1px);
+    background-size: 40px 40px;
+    opacity: 0.35;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 0 24px; position: relative; z-index: 1; }
+
+  /* ── HEADER ── */
+  header {
+    border-bottom: 1px solid var(--border2);
+    padding: 28px 0 20px;
+    margin-bottom: 32px;
+  }
+  .header-inner { display: flex; align-items: center; gap: 16px; }
+  .logo-icon {
+    width: 48px; height: 48px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border-radius: 12px;
+    display: grid; place-items: center;
+    font-size: 24px; flex-shrink: 0;
+    box-shadow: 0 0 20px rgba(0,229,176,0.3);
+  }
+  h1 { font-size: clamp(1.3rem, 3vw, 1.8rem); font-weight: 800; letter-spacing: -0.02em; }
+  h1 span { color: var(--accent); }
+  .subtitle { font-size: 0.78rem; color: var(--text2); font-family: 'Space Mono', monospace; margin-top: 2px; }
+
+  /* ── CONFIG PANEL ── */
+  .config-panel {
+    background: var(--surface);
+    border: 1px solid var(--border2);
+    border-radius: 16px;
+    padding: 28px;
+    margin-bottom: 28px;
+  }
+  .config-panel h2 { font-size: 1rem; font-weight: 700; color: var(--text2); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 20px; }
+  .config-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 18px; }
+  .config-group label { display: block; font-size: 0.72rem; color: var(--text2); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 6px; font-family: 'Space Mono', monospace; }
+  .config-group select,
+  .config-group input[type=range] { width: 100%; }
+  select {
+    background: var(--surface2); border: 1px solid var(--border2); color: var(--text);
+    border-radius: 8px; padding: 10px 12px; font-family: 'Space Mono', monospace; font-size: 0.82rem;
+    cursor: pointer; outline: none; appearance: none;
+  }
+  select:focus { border-color: var(--accent); }
+  .range-row { display: flex; align-items: center; gap: 10px; }
+  input[type=range] {
+    flex: 1; height: 4px; background: var(--border2); border-radius: 2px; cursor: pointer;
+    accent-color: var(--accent); outline: none;
+  }
+  .range-val { font-family: 'Space Mono', monospace; font-size: 0.82rem; color: var(--accent); min-width: 20px; }
+
+  .run-btn {
+    margin-top: 24px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    color: #0a0e0f; border: none; border-radius: 10px;
+    padding: 14px 36px; font-family: 'Syne', sans-serif; font-size: 1rem; font-weight: 800;
+    cursor: pointer; letter-spacing: 0.02em;
+    transition: transform 0.15s, box-shadow 0.15s;
+    box-shadow: 0 0 24px rgba(0,229,176,0.25);
+  }
+  .run-btn:hover { transform: translateY(-2px); box-shadow: 0 4px 32px rgba(0,229,176,0.4); }
+  .run-btn:active { transform: translateY(0); }
+  .run-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+  /* ── ROUNDS ── */
+  .rounds-container { display: flex; flex-direction: column; gap: 32px; }
+  .round-block {
+    background: var(--surface);
+    border: 1px solid var(--border2);
+    border-radius: 16px;
+    overflow: hidden;
+    animation: fadeUp 0.4s ease both;
+  }
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(18px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .round-header {
+    background: var(--surface2);
+    border-bottom: 1px solid var(--border2);
+    padding: 14px 24px;
+    display: flex; align-items: center; gap: 12px;
+  }
+  .round-badge {
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    color: #0a0e0f; font-weight: 800; font-size: 0.78rem;
+    padding: 3px 10px; border-radius: 20px; letter-spacing: 0.06em;
+  }
+  .round-header h3 { font-size: 1rem; font-weight: 700; }
+  .round-body { padding: 24px; }
+
+  /* ── INTAKE SECTION ── */
+  .intake-row { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 24px; }
+  @media(max-width:600px) { .intake-row { grid-template-columns: 1fr; } }
+  .intake-section h4 {
+    font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--text2); margin-bottom: 10px; font-family: 'Space Mono', monospace;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .intake-section h4 .dot { width: 6px; height: 6px; border-radius: 50%; }
+  .dot-green { background: var(--accent); }
+  .dot-amber { background: var(--amber); }
+
+  /* ── CARDS ── */
+  .cards-list { display: flex; flex-direction: column; gap: 6px; }
+  .card-item {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 8px; padding: 8px 12px;
+    display: flex; align-items: center; gap: 10px; font-size: 0.8rem;
+  }
+  .card-id { font-family: 'Space Mono', monospace; color: var(--accent); font-size: 0.72rem; min-width: 30px; }
+  .card-name { flex: 1; font-weight: 600; }
+  .blood-pill {
+    font-family: 'Space Mono', monospace; font-size: 0.65rem;
+    padding: 2px 8px; border-radius: 20px; font-weight: 700;
+  }
+  .bt-O  { background: rgba(0,229,176,0.15); color: var(--accent); border: 1px solid rgba(0,229,176,0.3); }
+  .bt-A  { background: rgba(255,77,109,0.15); color: var(--red);    border: 1px solid rgba(255,77,109,0.3); }
+  .bt-B  { background: rgba(167,139,250,0.15); color: #a78bfa;       border: 1px solid rgba(167,139,250,0.3); }
+  .bt-AB { background: rgba(255,200,71,0.15); color: var(--amber);   border: 1px solid rgba(255,200,71,0.3); }
+  .card-meta { font-family: 'Space Mono', monospace; font-size: 0.65rem; color: var(--text2); }
+  .expired-notice {
+    background: rgba(255,77,109,0.08); border: 1px solid rgba(255,77,109,0.25);
+    border-radius: 8px; padding: 8px 12px;
+    color: var(--red); font-size: 0.78rem; font-family: 'Space Mono', monospace;
+    margin-bottom: 20px;
+  }
+
+  /* ── ALGO RESULTS ── */
+  .algo-results { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; margin-top: 8px; }
+  .algo-card {
+    border-radius: 12px; padding: 18px;
+    border: 1px solid;
+  }
+  .algo-card.greedy   { border-color: rgba(0,229,176,0.3);  background: rgba(0,229,176,0.04); }
+  .algo-card.brute    { border-color: rgba(167,139,250,0.3); background: rgba(167,139,250,0.04); }
+  .algo-card.recursive{ border-color: rgba(251,191,36,0.3);  background: rgba(251,191,36,0.04); }
+  .algo-label {
+    font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.1em; font-weight: 700;
+    margin-bottom: 12px; font-family: 'Space Mono', monospace; display: flex; align-items: center; gap: 8px;
+  }
+  .algo-card.greedy    .algo-label { color: var(--greedy); }
+  .algo-card.brute     .algo-label { color: var(--brute); }
+  .algo-card.recursive .algo-label { color: var(--recursive); }
+  .algo-label .optimal-badge {
+    font-size: 0.6rem; background: rgba(0,229,176,0.2); color: var(--accent);
+    border-radius: 10px; padding: 1px 6px;
+  }
+  .brute .optimal-badge, .recursive .optimal-badge { background: rgba(0,229,176,0.2); color: var(--accent); }
+
+  .match-row {
+    display: flex; align-items: center; gap: 8px;
+    background: rgba(255,255,255,0.03); border-radius: 6px;
+    padding: 7px 10px; margin-bottom: 5px; font-size: 0.76rem;
+  }
+  .match-row .organ-id { font-family: 'Space Mono', monospace; color: var(--text2); font-size: 0.68rem; min-width: 32px; }
+  .match-arrow { color: var(--text2); font-size: 0.7rem; }
+  .match-patient { flex: 1; font-weight: 600; font-size: 0.78rem; }
+  .match-score {
+    font-family: 'Space Mono', monospace; font-size: 0.72rem; font-weight: 700;
+  }
+  .algo-card.greedy    .match-score { color: var(--greedy); }
+  .algo-card.brute     .match-score { color: var(--brute); }
+  .algo-card.recursive .match-score { color: var(--recursive); }
+
+  .algo-footer {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.07);
+    font-family: 'Space Mono', monospace; font-size: 0.68rem; color: var(--text2);
+  }
+  .algo-footer .total { font-weight: 700; }
+  .algo-card.greedy    .algo-footer .total { color: var(--greedy); }
+  .algo-card.brute     .algo-footer .total { color: var(--brute); }
+  .algo-card.recursive .algo-footer .total { color: var(--recursive); }
+  .no-match { color: var(--muted); font-style: italic; font-size: 0.78rem; padding: 4px 0; }
+
+  /* ── SUMMARY TABLE ── */
+  .summary-block {
+    background: var(--surface);
+    border: 1px solid var(--border2);
+    border-radius: 16px;
+    padding: 28px;
+    margin-top: 32px;
+    animation: fadeUp 0.4s ease both;
+  }
+  .summary-block h2 {
+    font-size: 1rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--text2); margin-bottom: 20px;
+  }
+  .summary-table { width: 100%; border-collapse: collapse; font-family: 'Space Mono', monospace; font-size: 0.8rem; }
+  .summary-table th {
+    text-align: left; padding: 10px 14px; font-size: 0.68rem;
+    text-transform: uppercase; letter-spacing: 0.08em; color: var(--text2);
+    border-bottom: 1px solid var(--border2); background: var(--surface2);
+  }
+  .summary-table th:nth-child(2) { color: var(--greedy); }
+  .summary-table th:nth-child(3) { color: var(--brute); }
+  .summary-table th:nth-child(4) { color: var(--recursive); }
+  .summary-table td { padding: 10px 14px; border-bottom: 1px solid var(--border); }
+  .summary-table tr:last-child td { border-bottom: none; }
+  .summary-table td:first-child { color: var(--text2); }
+  .summary-table td:nth-child(2) { color: var(--greedy); font-weight: 700; }
+  .summary-table td:nth-child(3) { color: var(--brute);  font-weight: 700; }
+  .summary-table td:nth-child(4) { color: var(--recursive); font-weight: 700; }
+  .winner-cell { position: relative; }
+  .winner-cell::after {
+    content: '★'; font-size: 0.7rem; margin-left: 4px;
+  }
+  .complexity-row td { font-size: 0.72rem; }
+
+  /* ── SCORE BAR CHART ── */
+  .bar-chart { margin-top: 24px; }
+  .bar-chart h3 { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text2); margin-bottom: 14px; font-family: 'Space Mono', monospace; }
+  .bar-row { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+  .bar-label { font-family: 'Space Mono', monospace; font-size: 0.7rem; min-width: 80px; }
+  .bar-track { flex: 1; height: 20px; background: var(--surface2); border-radius: 4px; overflow: hidden; position: relative; }
+  .bar-fill { height: 100%; border-radius: 4px; transition: width 0.8s cubic-bezier(0.23,1,0.32,1); width: 0; }
+  .bar-fill.greedy    { background: linear-gradient(90deg, var(--greedy), #00b8e0); }
+  .bar-fill.brute     { background: linear-gradient(90deg, var(--brute), #6d28d9); }
+  .bar-fill.recursive { background: linear-gradient(90deg, var(--recursive), #f97316); }
+  .bar-val { font-family: 'Space Mono', monospace; font-size: 0.72rem; min-width: 44px; text-align: right; }
+
+  /* ── EMPTY STATE ── */
+  .empty-state {
+    text-align: center; padding: 64px 24px; color: var(--muted);
+  }
+  .empty-state .icon { font-size: 3rem; margin-bottom: 16px; opacity: 0.4; }
+  .empty-state p { font-size: 0.9rem; }
+
+  /* scrollbar */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="header-inner">
+      <div class="logo-icon">🫀</div>
+      <div>
+        <h1>Smart <span>Organ</span> Matching</h1>
+        <div class="subtitle">Greedy &nbsp;|&nbsp; Brute Force &nbsp;|&nbsp; Recursive Backtracking</div>
+      </div>
+    </div>
+  </header>
+
+  <!-- CONFIG -->
+  <div class="config-panel">
+    <h2>⚙ Simulation Config</h2>
+    <div class="config-grid">
+      <div class="config-group">
+        <label>Weighting Mode</label>
+        <select id="weightMode">
+          <option value="balanced">Balanced (default)</option>
+          <option value="urgency">Urgency-First (critical patients first)</option>
+          <option value="fairness">Fairness-First (long waiters first)</option>
+        </select>
+      </div>
+      <div class="config-group">
+        <label>Rounds: <span id="roundsVal">4</span></label>
+        <div class="range-row">
+          <input type="range" id="roundsSlider" min="1" max="8" value="4"/>
+        </div>
+      </div>
+      <div class="config-group">
+        <label>Patients / Round: <span id="patientsVal">4</span></label>
+        <div class="range-row">
+          <input type="range" id="patientsSlider" min="2" max="8" value="4"/>
+        </div>
+      </div>
+      <div class="config-group">
+        <label>Organs / Round: <span id="organsVal">3</span></label>
+        <div class="range-row">
+          <input type="range" id="organsSlider" min="1" max="6" value="3"/>
+        </div>
+      </div>
+    </div>
+    <button class="run-btn" id="runBtn" onclick="runSimulation()">▶ Run Simulation</button>
+  </div>
+
+  <!-- OUTPUT -->
+  <div id="output">
+    <div class="empty-state">
+      <div class="icon">🔬</div>
+      <p>Configure and run the simulation to see results.</p>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── RNG (seeded, same as C++ mt19937 seed=42 approximation) ─────────────────
+// We use a simple seeded LCG for reproducibility
+let seed = 42;
+function srand(s) { seed = s; }
+function rand() {
+  seed = (seed * 1664525 + 1013904223) & 0xffffffff;
+  return (seed >>> 0) / 0xffffffff;
+}
+function randInt(lo, hi) { return lo + Math.floor(rand() * (hi - lo + 1)); }
+function randFloat(lo, hi) { return lo + rand() * (hi - lo); }
+
+// ─── Blood Types ──────────────────────────────────────────────────────────────
+const BT = { O: 0, A: 1, B: 2, AB: 3 };
+const BT_STR = ['O', 'A', 'B', 'AB'];
+
+function randomBloodType() {
+  const r = randInt(0, 99);
+  if (r < 44) return BT.O;
+  if (r < 86) return BT.A;
+  if (r < 96) return BT.B;
+  return BT.AB;
+}
+
+function isCompatible(donor, recipient) {
+  if (donor === BT.O)  return true;
+  if (donor === BT.AB) return recipient === BT.AB;
+  if (donor === BT.A)  return recipient === BT.A  || recipient === BT.AB;
+  if (donor === BT.B)  return recipient === BT.B  || recipient === BT.AB;
+  return false;
+}
+
+// ─── Names ───────────────────────────────────────────────────────────────────
+const NAMES = ['Ahmed','Sara','Omar','Nour','Khaled','Rania','Youssef','Dina',
+               'Tarek','Mona','Hassan','Layla','Ibrahim','Heba','Mostafa','Aya'];
+
+let nextPatientId = 1, nextOrganId = 1;
+
+function randomPatient() {
+  const name = NAMES[randInt(0, NAMES.length-1)] + ' #' + nextPatientId;
+  return { id: nextPatientId++, name, blood_type: randomBloodType(),
+           priority: randInt(1,10), waiting_days: randInt(1,730),
+           alive: true, matched: false };
+}
+function randomOrgan() {
+  return { id: nextOrganId++, blood_type: randomBloodType(),
+           quality: randFloat(0.3, 1.0), expiry_ticks: randInt(1,5), assigned: false };
+}
+
+// ─── Weights ─────────────────────────────────────────────────────────────────
+function getWeights(mode) {
+  if (mode === 'urgency')  return { w_priority: 0.60, w_waiting: 0.15, w_compatibility: 0.15, w_quality: 0.10 };
+  if (mode === 'fairness') return { w_priority: 0.15, w_waiting: 0.60, w_compatibility: 0.15, w_quality: 0.10 };
+  return { w_priority: 0.40, w_waiting: 0.30, w_compatibility: 0.15, w_quality: 0.15 };
+}
+
+// ─── Score ────────────────────────────────────────────────────────────────────
+function computeScore(patient, organ, w) {
+  const prio_norm    = patient.priority / 10.0;
+  const wait_norm    = Math.min(patient.waiting_days / 365.0, 1.0);
+  const compat_bonus = (patient.blood_type === organ.blood_type) ? 1.0 : 0.5;
+  const quality      = organ.quality;
+  return w.w_priority * prio_norm + w.w_waiting * wait_norm
+       + w.w_compatibility * compat_bonus + w.w_quality * quality;
+}
+
+// ─── ALGORITHM 1: GREEDY ──────────────────────────────────────────────────────
+function runGreedy(organs, patients, w) {
+  const results = [];
+  const organUsed   = new Array(organs.length).fill(false);
+  const patientUsed = new Array(patients.length).fill(false);
+
+  const order = organs.map((_, i) => i).sort((a, b) => organs[a].expiry_ticks - organs[b].expiry_ticks);
+
+  for (const oi of order) {
+    if (organUsed[oi] || organs[oi].assigned) continue;
+    let bestScore = -1, bestPi = -1;
+    for (let pi = 0; pi < patients.length; pi++) {
+      if (patientUsed[pi] || !patients[pi].alive || patients[pi].matched) continue;
+      if (!isCompatible(organs[oi].blood_type, patients[pi].blood_type)) continue;
+      const s = computeScore(patients[pi], organs[oi], w);
+      if (s > bestScore) { bestScore = s; bestPi = pi; }
+    }
+    if (bestPi >= 0) {
+      organUsed[oi] = true; patientUsed[bestPi] = true;
+      results.push({
+        organ_id: organs[oi].id, patient_id: patients[bestPi].id,
+        patient_name: patients[bestPi].name, score: bestScore,
+        organ_blood: BT_STR[organs[oi].blood_type],
+        patient_blood: BT_STR[patients[bestPi].blood_type]
+      });
+    }
+  }
+  return results;
+}
+
+// ─── ALGORITHM 2: BRUTE FORCE ─────────────────────────────────────────────────
+function runBruteForce(organs, patients, w) {
+  const org_idx = organs.map((o,i) => i).filter(i => !organs[i].assigned);
+  const pat_idx = patients.map((p,i) => i).filter(i => patients[i].alive && !patients[i].matched);
+  const nO = org_idx.length, nP = pat_idx.length;
+
+  // Build candidate list (real patient indices + -1 padding)
+  const cand = [...pat_idx];
+  while (cand.length < nO) cand.push(-1);
+  cand.sort((a, b) => a - b);
+
+  let bestTotal = -1;
+  let bestAssign = new Array(nO).fill(-1);
+
+  // Generate all permutations
+  function permutations(arr) {
+    const result = [];
+    function helper(current, remaining) {
+      if (remaining.length === 0) { result.push([...current]); return; }
+      for (let i = 0; i < remaining.length; i++) {
+        current.push(remaining[i]);
+        const next = remaining.filter((_, j) => j !== i);
+        helper(current, next);
+        current.pop();
+      }
+    }
+    helper([], arr);
+    return result;
+  }
+
+  const perms = permutations(cand);
+  for (const perm of perms) {
+    let total = 0; let valid = true;
+    for (let i = 0; i < nO; i++) {
+      const pi = perm[i];
+      if (pi < 0) continue;
+      if (!isCompatible(organs[org_idx[i]].blood_type, patients[pi].blood_type)) { valid = false; break; }
+      total += computeScore(patients[pi], organs[org_idx[i]], w);
+    }
+    if (valid && total > bestTotal) { bestTotal = total; bestAssign = [...perm]; }
+  }
+
+  const results = [];
+  for (let i = 0; i < nO; i++) {
+    const pi = bestAssign[i];
+    if (pi < 0) continue;
+    const s = computeScore(patients[pi], organs[org_idx[i]], w);
+    results.push({
+      organ_id: organs[org_idx[i]].id, patient_id: patients[pi].id,
+      patient_name: patients[pi].name, score: s,
+      organ_blood: BT_STR[organs[org_idx[i]].blood_type],
+      patient_blood: BT_STR[patients[pi].blood_type]
+    });
+  }
+  return results;
+}
+
+// ─── ALGORITHM 3: RECURSIVE BACKTRACKING ─────────────────────────────────────
+function runRecursive(organs, patients, w) {
+  const org_idx = organs.map((o,i) => i).filter(i => !organs[i].assigned);
+  org_idx.sort((a, b) => organs[a].expiry_ticks - organs[b].expiry_ticks);
+  const nO = org_idx.length;
+
+  const state = {
+    bestTotal: -1,
+    bestAssign: new Array(nO).fill(-1),
+    patUsed: patients.map(p => p.matched || !p.alive)
+  };
+
+  const currentAssign = new Array(nO).fill(-1);
+
+  function recurse(level, currentTotal) {
+    if (level === nO) {
+      if (currentTotal > state.bestTotal) {
+        state.bestTotal = currentTotal;
+        state.bestAssign = [...currentAssign];
+      }
+      return;
+    }
+    const oi = org_idx[level];
+    // Option A: skip
+    currentAssign[level] = -1;
+    recurse(level + 1, currentTotal);
+
+    // Option B: assign a compatible patient
+    for (let pi = 0; pi < patients.length; pi++) {
+      if (state.patUsed[pi]) continue;
+      if (!patients[pi].alive || patients[pi].matched) continue;
+      if (!isCompatible(organs[oi].blood_type, patients[pi].blood_type)) continue;
+      const s = computeScore(patients[pi], organs[oi], w);
+      const remaining = nO - level - 1;
+      const optimistic = currentTotal + s + remaining * 1.0;
+      if (optimistic <= state.bestTotal) continue;
+      state.patUsed[pi] = true; currentAssign[level] = pi;
+      recurse(level + 1, currentTotal + s);
+      state.patUsed[pi] = false; currentAssign[level] = -1;
+    }
+  }
+
+  recurse(0, 0);
+
+  const results = [];
+  for (let i = 0; i < nO; i++) {
+    const pi = state.bestAssign[i];
+    if (pi < 0) continue;
+    const s = computeScore(patients[pi], organs[org_idx[i]], w);
+    results.push({
+      organ_id: organs[org_idx[i]].id, patient_id: patients[pi].id,
+      patient_name: patients[pi].name, score: s,
+      organ_blood: BT_STR[organs[org_idx[i]].blood_type],
+      patient_blood: BT_STR[patients[pi].blood_type]
+    });
+  }
+  return results;
+}
+
+// ─── UI HELPERS ───────────────────────────────────────────────────────────────
+function btClass(bt) { return 'bt-' + bt; }
+
+function renderMatches(matches, cls) {
+  if (!matches.length) return `<div class="no-match">No matches found</div>`;
+  let html = '';
+  for (const m of matches) {
+    html += `<div class="match-row">
+      <span class="organ-id">O${m.organ_id}</span>
+      <span class="match-arrow">→</span>
+      <span class="blood-pill ${btClass(m.organ_blood)}">${m.organ_blood}</span>
+      <span class="match-arrow">→</span>
+      <span class="match-patient">${m.patient_name}</span>
+      <span class="blood-pill ${btClass(m.patient_blood)}">${m.patient_blood}</span>
+      <span class="match-score">${m.score.toFixed(3)}</span>
+    </div>`;
+  }
+  const total = matches.reduce((s,m) => s + m.score, 0);
+  html += `<div class="algo-footer">
+    <span>${matches.length} match${matches.length!==1?'es':''}</span>
+    <span class="total">Σ ${total.toFixed(3)}</span>
+  </div>`;
+  return html;
+}
+
+// ─── MAIN SIMULATION ──────────────────────────────────────────────────────────
+function runSimulation() {
+  srand(42);
+  nextPatientId = 1; nextOrganId = 1;
+
+  const rounds  = parseInt(document.getElementById('roundsSlider').value);
+  const ppr     = parseInt(document.getElementById('patientsSlider').value);
+  const opr     = parseInt(document.getElementById('organsSlider').value);
+  const mode    = document.getElementById('weightMode').value;
+  const w       = getWeights(mode);
+
+  const btn = document.getElementById('runBtn');
+  btn.disabled = true; btn.textContent = '⏳ Running...';
+
+  setTimeout(() => {
+    const patients = [], organs = [];
+    const roundData = [];
+
+    // Accumulators
+    let gMatched=0, bMatched=0, rMatched=0;
+    let gScore=0,   bScore=0,   rScore=0;
+    let gTime=0,    bTime=0,    rTime=0;
+
+    for (let round = 1; round <= rounds; round++) {
+      // Add new patients/organs
+      const newPatients = [];
+      for (let i=0;i<ppr;i++) { const p=randomPatient(); patients.push(p); newPatients.push(p); }
+      const newOrgans = [];
+      for (let i=0;i<opr;i++) { const o=randomOrgan(); organs.push(o); newOrgans.push(o); }
+
+      // Expire
+      for (const o of organs) if (!o.assigned) o.expiry_ticks--;
+      const expired = organs.filter(o => !o.assigned && o.expiry_ticks <= 0).length;
+      for (let i = organs.length-1; i >= 0; i--)
+        if (!organs[i].assigned && organs[i].expiry_ticks <= 0) organs.splice(i,1);
+
+      // Deep copy for each algorithm
+      const copyOrgans   = organs.map(o => ({...o}));
+      const copyPatients = patients.map(p => ({...p}));
+
+      let t0, t1;
+
+      t0 = performance.now();
+      const gm = runGreedy(copyOrgans, copyPatients, w);
+      t1 = performance.now();
+      const gt = Math.round((t1-t0)*1000);
+
+      t0 = performance.now();
+      const bm = runBruteForce(copyOrgans, copyPatients, w);
+      t1 = performance.now();
+      const bt_time = Math.round((t1-t0)*1000);
+
+      t0 = performance.now();
+      const rm = runRecursive(copyOrgans, copyPatients, w);
+      t1 = performance.now();
+      const rt = Math.round((t1-t0)*1000);
+
+      // Mark actual state (greedy drives simulation)
+      for (const m of gm) {
+        for (const o of organs) if (o.id === m.organ_id) { o.assigned = true; break; }
+        for (const p of patients) if (p.id === m.patient_id) { p.matched = true; break; }
+      }
+
+      gMatched += gm.length; gScore += gm.reduce((s,m)=>s+m.score,0); gTime += gt;
+      bMatched += bm.length; bScore += bm.reduce((s,m)=>s+m.score,0); bTime += bt_time;
+      rMatched += rm.length; rScore += rm.reduce((s,m)=>s+m.score,0); rTime += rt;
+
+      roundData.push({ round, newPatients, newOrgans, expired, gm, bm, rm, gt, bt_time, rt });
+    }
+
+    // ── RENDER ────────────────────────────────────────────────────────────────
+    let html = '<div class="rounds-container">';
+    for (const d of roundData) {
+      html += `<div class="round-block" style="animation-delay:${(d.round-1)*0.07}s">
+        <div class="round-header">
+          <span class="round-badge">ROUND ${d.round}</span>
+          <h3>Simulation Round ${d.round}</h3>
+        </div>
+        <div class="round-body">`;
+
+      if (d.expired > 0)
+        html += `<div class="expired-notice">⚠ ${d.expired} organ${d.expired>1?'s':''} expired this round</div>`;
+
+      html += `<div class="intake-row">
+        <div class="intake-section">
+          <h4><span class="dot dot-green"></span> New Patients (${d.newPatients.length})</h4>
+          <div class="cards-list">`;
+      for (const p of d.newPatients)
+        html += `<div class="card-item">
+          <span class="card-id">P${p.id}</span>
+          <span class="card-name">${p.name}</span>
+          <span class="blood-pill ${btClass(BT_STR[p.blood_type])}">${BT_STR[p.blood_type]}</span>
+          <span class="card-meta">P${p.priority} · ${p.waiting_days}d</span>
+        </div>`;
+      html += `</div></div>
+        <div class="intake-section">
+          <h4><span class="dot dot-amber"></span> New Organs (${d.newOrgans.length})</h4>
+          <div class="cards-list">`;
+      for (const o of d.newOrgans)
+        html += `<div class="card-item">
+          <span class="card-id">O${o.id}</span>
+          <span class="card-name">Organ #${o.id}</span>
+          <span class="blood-pill ${btClass(BT_STR[o.blood_type])}">${BT_STR[o.blood_type]}</span>
+          <span class="card-meta">Q${o.quality.toFixed(2)} · ${o.expiry_ticks+1}tk</span>
+        </div>`;
+      html += `</div></div></div>`;
+
+      html += `<div class="algo-results">
+        <div class="algo-card greedy">
+          <div class="algo-label">Algorithm 1 — Greedy <span style="font-size:0.6rem;color:var(--muted)">O(O×P)</span></div>
+          ${renderMatches(d.gm, 'greedy')}
+          <div style="font-family:'Space Mono',monospace;font-size:0.62rem;color:var(--muted);margin-top:8px;">⏱ ${d.gt} µs</div>
+        </div>
+        <div class="algo-card brute">
+          <div class="algo-label">Algorithm 2 — Brute Force <span class="optimal-badge">OPTIMAL</span></div>
+          ${renderMatches(d.bm, 'brute')}
+          <div style="font-family:'Space Mono',monospace;font-size:0.62rem;color:var(--muted);margin-top:8px;">⏱ ${d.bt_time} µs</div>
+        </div>
+        <div class="algo-card recursive">
+          <div class="algo-label">Algorithm 3 — Recursive <span class="optimal-badge">OPTIMAL</span></div>
+          ${renderMatches(d.rm, 'recursive')}
+          <div style="font-family:'Space Mono',monospace;font-size:0.62rem;color:var(--muted);margin-top:8px;">⏱ ${d.rt} µs</div>
+        </div>
+      </div>`;
+
+      html += `</div></div>`;
+    }
+    html += '</div>';
+
+    // ── SUMMARY ───────────────────────────────────────────────────────────────
+    const maxScore = Math.max(gScore, bScore, rScore);
+    const winnerScore = (s) => s === maxScore && s > 0 ? 'winner-cell' : '';
+
+    html += `<div class="summary-block">
+      <h2>📊 Algorithm Comparison Summary</h2>
+      <table class="summary-table">
+        <thead>
+          <tr>
+            <th>Metric</th>
+            <th>Greedy</th>
+            <th>Brute Force</th>
+            <th>Recursive</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Total Matches</td>
+            <td>${gMatched}</td><td>${bMatched}</td><td>${rMatched}</td>
+          </tr>
+          <tr>
+            <td>Total Score</td>
+            <td class="${winnerScore(gScore)}">${gScore.toFixed(3)}</td>
+            <td class="${winnerScore(bScore)}">${bScore.toFixed(3)}</td>
+            <td class="${winnerScore(rScore)}">${rScore.toFixed(3)}</td>
+          </tr>
+          <tr>
+            <td>Total Time</td>
+            <td>${gTime} µs</td><td>${bTime} µs</td><td>${rTime} µs</td>
+          </tr>
+          <tr class="complexity-row">
+            <td>Time Complexity</td>
+            <td>O(O × P)</td><td>O(P^O)</td><td>O(P!) pruned</td>
+          </tr>
+          <tr class="complexity-row">
+            <td>Space Complexity</td>
+            <td>O(O + P)</td><td>O(O)</td><td>O(O + P)</td>
+          </tr>
+          <tr>
+            <td>Globally Optimal?</td>
+            <td style="color:var(--red)">No (local)</td>
+            <td style="color:var(--accent)">Yes ✓</td>
+            <td style="color:var(--accent)">Yes ✓</td>
+          </tr>
+          <tr>
+            <td>Scalable?</td>
+            <td style="color:var(--accent)">Yes ✓</td>
+            <td style="color:var(--red)">No (small N)</td>
+            <td style="color:var(--amber)">Moderate</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="bar-chart">
+        <h3>Total Score Comparison</h3>
+        <div class="bar-row">
+          <span class="bar-label" style="color:var(--greedy)">Greedy</span>
+          <div class="bar-track"><div class="bar-fill greedy" id="bar-g" style="width:0%"></div></div>
+          <span class="bar-val" style="color:var(--greedy)">${gScore.toFixed(2)}</span>
+        </div>
+        <div class="bar-row">
+          <span class="bar-label" style="color:var(--brute)">Brute Force</span>
+          <div class="bar-track"><div class="bar-fill brute" id="bar-b" style="width:0%"></div></div>
+          <span class="bar-val" style="color:var(--brute)">${bScore.toFixed(2)}</span>
+        </div>
+        <div class="bar-row">
+          <span class="bar-label" style="color:var(--recursive)">Recursive</span>
+          <div class="bar-track"><div class="bar-fill recursive" id="bar-r" style="width:0%"></div></div>
+          <span class="bar-val" style="color:var(--recursive)">${rScore.toFixed(2)}</span>
+        </div>
+      </div>
+    </div>`;
+
+    document.getElementById('output').innerHTML = html;
+
+    // Animate bars
+    requestAnimationFrame(() => {
+      setTimeout(() => {
+        const top = Math.max(gScore, bScore, rScore, 0.001);
+        document.getElementById('bar-g').style.width = (gScore/top*100).toFixed(1) + '%';
+        document.getElementById('bar-b').style.width = (bScore/top*100).toFixed(1) + '%';
+        document.getElementById('bar-r').style.width = (rScore/top*100).toFixed(1) + '%';
+      }, 200);
+    });
+
+    btn.disabled = false; btn.textContent = '▶ Run Simulation';
+  }, 30);
+}
+
+// ─── Sliders ─────────────────────────────────────────────────────────────────
+document.getElementById('roundsSlider').addEventListener('input', function() {
+  document.getElementById('roundsVal').textContent = this.value;
+});
+document.getElementById('patientsSlider').addEventListener('input', function() {
+  document.getElementById('patientsVal').textContent = this.value;
+});
+document.getElementById('organsSlider').addEventListener('input', function() {
+  document.getElementById('organsVal').textContent = this.value;
+});
+</script>
+</body>
+</html>
